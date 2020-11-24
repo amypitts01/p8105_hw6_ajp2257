@@ -7,11 +7,11 @@ output: github_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(MASS)
+
 library(modelr)
 library(mgcv)
 library(tidyverse)
-library(dplyr)
+
 
 ```
 
@@ -77,7 +77,7 @@ homicide_df %>%
     CI_lower = exp(estimate - 1.96 * std.error),
     CI_upper = exp(estimate + 1.96 * std.error)
   ) %>%
-  dplyr::select(city_state, term, OR, starts_with("CI") )
+  select(city_state, term, OR, starts_with("CI") )
 ```
 
 
@@ -142,98 +142,74 @@ sum(is.na(birthweight_df) ) # there are no missing values in this dataset!
 
 ##### Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
 
-```{r}
+```{r message=FALSE, warning=FALSE, echo=TRUE, results = 'hide'}
 # using a stepwise selection to try to determine what variables to use 
 fit = lm(bwt ~., data = birthweight_df)
 # stepAIC comes from the MASS pacakge 
-step = stepAIC(fit, direction="both") # I am going to use both directions 
-step$anova # display results
+step = MASS::stepAIC(fit, direction="both") # I am going to use both directions 
+# I am not printing out all the steps just the final results 
+```
+
+
+```{r}
+step$anova # display results from the stepwise 
 # The results give me an optimal model of 
 # bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + mheight + mrace + parity + ppwt + smoken
+```
 
+
+```{r}
+# this model is given by the step wise comparision 
 fit1 = lm(bwt ~ babysex + bhead + blength + delwt + 
                 fincome + gaweeks + mheight + mrace + 
                 parity + ppwt + smoken,
           data= birthweight_df)
+
+# This gives info about the quality of the model 
+fit1 %>%
+  broom::glance()
+
+# looking at the estimates and the p-values
+fit1 %>%
+  broom::tidy()
+
+# this is the histogram of just the residuals  
 birthweight_df %>%
   modelr::add_residuals(fit1) %>%
   ggplot(aes(x = resid)) +
   geom_density()
 
-birthweight_df %>%
-  modelr::add_residuals(fit1) %>%
-  ggplot(aes(x=gaweeks, y = resid)) +
-  geom_point()
+# plot of model residuals against fitted values
+birthweight_df %>% 
+  modelr::add_residuals(fit1) %>% 
+  modelr::add_predictions(fit1) %>%
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point() +
+  labs(
+    title = "Model 1 Residuals against fitted value",
+    subtitle = "Using predictors given by the stepwise function ",
+    x = "Fitted Value",
+    y = "Residuals"
+  )
 
-
-fit1 %>%
-  broom::glance()
-
-fit1 %>%
-  broom::tidy()
 ```
 
 
 ##### Compare your model to two others:
-
 - One using length at birth and gestational age as predictors (main effects only)
 - One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
 Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
 
-Model using the length at birth and gestational age as predictors (main effects only) to try to predict birth weight
+Setting up the two new models described above. 
 ```{r}
 fit2 = lm(bwt ~ blength + gaweeks,  data = birthweight_df)
-
-fit2 %>%
-  broom::glance()
-
-fit2 %>%
-  broom::tidy()
-
-# plot of model residuals against fitted values
-birthweight_df %>% 
-  modelr::add_residuals(fit2) %>% 
-  modelr::add_predictions(fit2) %>%
-  ggplot(aes(x = pred, y = resid)) + 
-  geom_point() +
-  labs(
-    title = "Model 2 Residuals against fitted value",
-    subtitle = "using birth length and gestational age to predict birth weight",
-    x = "Fitted Value",
-    y = "Residuals"
-  )
-
-
-```
-model using head circumference, length, sex, and all interactions (including the three-way interaction)
-```{r}
 fit3 = lm(bwt ~ blength + bhead  + babysex + 
                 bhead*blength + bhead*babysex + blength*babysex + 
                 bhead*blength*babysex, 
           data = birthweight_df)
-
-fit3 %>%
-  broom::glance()
-
-fit3 %>%
-  broom::tidy()
-
-# plot of model residuals against fitted values
-birthweight_df %>% 
-  modelr::add_residuals(fit3) %>% 
-  modelr::add_predictions(fit3) %>%
-  ggplot(aes(x = pred, y = resid)) + 
-  geom_point() +
-  labs(
-    title = "Model 3 Residuals against fitted value",
-    subtitle = "Using head circumference, length, sex, and all interactions (including the three-way interaction)",
-    x = "Fitted Value",
-    y = "Residuals"
-  )
-
 ```
 
-Comparing all the models 
+Comparing all the models with a quick visualization
 ```{r}
 birthweight_df %>% 
   gather_predictions(fit1, fit2, fit3) %>% 
@@ -243,15 +219,18 @@ birthweight_df %>%
   geom_line(aes(y = pred), color = "red") + 
   facet_grid(~model)
 ```
-Cross validation 
+The red line represents the regression line and the points represent the values.
 
+Cross validation to compare all the models 
 ```{r}
+# creating testing and training model 
 cv_df =
   crossv_mc(birthweight_df, 100) %>% 
   mutate(
     train = map(train, as_tibble),
     test = map(test, as_tibble))
 
+# updating the dataset to now include each regression model and the rmse 
 cv_df = 
   cv_df %>% 
   mutate(
@@ -270,6 +249,7 @@ cv_df =
     rmse_fit3 = map2_dbl(fit2, test, ~rmse(model = .x, data = .y))
   )
 
+# plotting the rmse of the three models 
 cv_df %>%
   dplyr::select(starts_with("rmse")) %>%
   pivot_longer(
@@ -281,8 +261,8 @@ cv_df %>%
   ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
 
+This violin plot shows that the lowest rmse value come from the fit1 which is the only I create. I choose the predictors based on a stepwise selection so it makes sense that is preforming the best compare to the other two. Comparing fit2 against fit3 we don't see a huge difference so if I had to choose one or the other I would choose the simpler model without all the interaction terms. However, fit1 does have the lowest rmse values and has no over complicating interaction terms therefore I would select this model. 
 
-##### Note that although we expect your model to be reasonable, model building itself is not a main idea of the course and we don’t necessarily expect your model to be “optimal”.
 
 
 
