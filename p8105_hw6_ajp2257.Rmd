@@ -7,13 +7,19 @@ output: github_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+library(modelr)
+library(mgcv)
 library(tidyverse)
-library(p8105.datasets)
+library(dplyr)
+
 ```
 
 
 # Question 1
-The Washington Post has gathered data on homicides in 50 large U.S. cities and made the data available through a GitHub repository here. You can read their accompanying article here.
+##### The Washington Post has gathered data on homicides in 50 large U.S. cities and made the data available through a GitHub repository here. You can read their accompanying article here.
+
+##### Create a city_state variable (e.g. “Baltimore, MD”), and a binary variable indicating whether the homicide is solved. Omit cities Dallas, TX; Phoenix, AZ; and Kansas City, MO – these don’t report victim race. Also omit Tulsa, AL – this is a data entry mistake. For this problem, limit your analysis those for whom victim_race is white or black. Be sure that victim_age is numeric.
 
 ```{r warning=FALSE, message=FALSE}
 homicide_df = read_csv("data/homicide-data.csv", na = c("", "NA", "Unknown")) %>% #
@@ -29,10 +35,10 @@ homicide_df = read_csv("data/homicide-data.csv", na = c("", "NA", "Unknown")) %>
   filter(
     victim_race %in% c("White", "Black"),
     city_state != "Tulsa_AL") %>%
-  select(city_state, resolution, victim_age, victim_race, victim_sex)
+  dplyr::select(city_state, resolution, victim_age, victim_race, victim_sex)
 ```
 
-Create a city_state variable (e.g. “Baltimore, MD”), and a binary variable indicating whether the homicide is solved. Omit cities Dallas, TX; Phoenix, AZ; and Kansas City, MO – these don’t report victim race. Also omit Tulsa, AL – this is a data entry mistake. For this problem, limit your analysis those for whom victim_race is white or black. Be sure that victim_age is numeric.
+##### For the city of Baltimore, MD, use the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race as predictors. Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing non-white victims to white victims keeping all other variables fixed.
 
 ```{r}
 baltimore_df = 
@@ -48,12 +54,12 @@ glm(factor(resolution) ~ victim_age + victim_race + victim_sex,
     CI_lower = exp(estimate - 1.96 * std.error),
     CI_upper = exp(estimate + 1.96 * std.error)
   ) %>%
-  select(term, OR, starts_with("CI") ) %>%
+  dplyr::select(term, OR, starts_with("CI") ) %>%
   knitr::kable(digits = 3)
 ```
 
 
-For the city of Baltimore, MD, use the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race as predictors. Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing non-white victims to white victims keeping all other variables fixed.
+##### Now run glm for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing Black victims to white victims. Do this within a “tidy” pipeline, making use of purrr::map, list columns, and unnest as necessary to create a dataframe with estimated ORs and CIs for each city.
 
 ```{r}
 model_results = 
@@ -64,19 +70,18 @@ homicide_df %>%
                                     data = .x, family = binomial())),
     results = map(models, broom::tidy)
   ) %>%
-  select(city_state, results) %>%
+  dplyr::select(city_state, results) %>%
   unnest(results) %>%
   mutate(
     OR = exp(estimate),
     CI_lower = exp(estimate - 1.96 * std.error),
     CI_upper = exp(estimate + 1.96 * std.error)
   ) %>%
-  select(city_state, term, OR, starts_with("CI") )
+  dplyr::select(city_state, term, OR, starts_with("CI") )
 ```
 
-Now run glm for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing Black victims to white victims. Do this within a “tidy” pipeline, making use of purrr::map, list columns, and unnest as necessary to create a dataframe with estimated ORs and CIs for each city.
 
-Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot.
+##### Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot.
 
 ```{r}
 model_results %>%
@@ -95,11 +100,11 @@ model_results %>%
 
 # Question 2
 
-In this problem, you will analyze data gathered to understand the effects of several variables on a child’s birthweight. This dataset, available here, consists of roughly 4000 children and includes the following variables:
+#####  In this problem, you will analyze data gathered to understand the effects of several variables on a child’s birthweight. This dataset, available here, consists of roughly 4000 children and includes the following variables:
 
 - `babysex`: baby’s sex (male = 1, female = 2)
 - `bhead`: baby’s head circumference at birth (centimeters)
-- `blength`: baby’s length at birth (centimeteres)
+- `blength`: baby’s length at birth (centimeters)
 - `bwt`: baby’s birth weight (grams)
 - `delwt`: mother’s weight at delivery (pounds)
 - `fincome`: family monthly income (in hundreds, rounded)
@@ -138,7 +143,34 @@ sum(is.na(birthweight_df) ) # there are no missing values in this dataset!
 ##### Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
 
 ```{r}
+# using a stepwise selection to try to determine what variables to use 
+fit = lm(bwt ~., data = birthweight_df)
+# stepAIC comes from the MASS pacakge 
+step = stepAIC(fit, direction="both") # I am going to use both directions 
+step$anova # display results
+# The results give me an optimal model of 
+# bwt ~ babysex + bhead + blength + delwt + fincome + gaweeks + mheight + mrace + parity + ppwt + smoken
 
+fit1 = lm(bwt ~ babysex + bhead + blength + delwt + 
+                fincome + gaweeks + mheight + mrace + 
+                parity + ppwt + smoken,
+          data= birthweight_df)
+birthweight_df %>%
+  modelr::add_residuals(fit1) %>%
+  ggplot(aes(x = resid)) +
+  geom_density()
+
+birthweight_df %>%
+  modelr::add_residuals(fit1) %>%
+  ggplot(aes(x=gaweeks, y = resid)) +
+  geom_point()
+
+
+fit1 %>%
+  broom::glance()
+
+fit1 %>%
+  broom::tidy()
 ```
 
 
@@ -175,7 +207,7 @@ birthweight_df %>%
 ```
 model using head circumference, length, sex, and all interactions (including the three-way interaction)
 ```{r}
-fit3 = lm(bwt ~ bhead + blength + babysex + 
+fit3 = lm(bwt ~ blength + bhead  + babysex + 
                 bhead*blength + bhead*babysex + blength*babysex + 
                 bhead*blength*babysex, 
           data = birthweight_df)
@@ -188,8 +220,8 @@ fit3 %>%
 
 # plot of model residuals against fitted values
 birthweight_df %>% 
-  modelr::add_residuals(fit2) %>% 
-  modelr::add_predictions(fit2) %>%
+  modelr::add_residuals(fit3) %>% 
+  modelr::add_predictions(fit3) %>%
   ggplot(aes(x = pred, y = resid)) + 
   geom_point() +
   labs(
@@ -201,6 +233,53 @@ birthweight_df %>%
 
 ```
 
+Comparing all the models 
+```{r}
+birthweight_df %>% 
+  gather_predictions(fit1, fit2, fit3) %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = blength, y = bwt)) + 
+  geom_point(alpha = .5) +
+  geom_line(aes(y = pred), color = "red") + 
+  facet_grid(~model)
+```
+Cross validation 
+
+```{r}
+cv_df =
+  crossv_mc(birthweight_df, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+
+cv_df = 
+  cv_df %>% 
+  mutate(
+    fit1  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + 
+                                 fincome + gaweeks + mheight + mrace + 
+                                 parity + ppwt + smoken, 
+                           data = .x)),
+    fit2  = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+    fit3  = map(train, ~lm(bwt ~ blength + bhead  + babysex + 
+                bhead*blength + bhead*babysex + blength*babysex + 
+                bhead*blength*babysex, data = .x))
+  ) %>% 
+  mutate(
+    rmse_fit1 = map2_dbl(fit1, test, ~rmse(model = .x, data = .y)),
+    rmse_fit2 = map2_dbl(fit2, test, ~rmse(model = .x, data = .y)),
+    rmse_fit3 = map2_dbl(fit2, test, ~rmse(model = .x, data = .y))
+  )
+
+cv_df %>%
+  dplyr::select(starts_with("rmse")) %>%
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_") %>%
+  mutate(model = fct_inorder(model)) %>%
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
 
 
 ##### Note that although we expect your model to be reasonable, model building itself is not a main idea of the course and we don’t necessarily expect your model to be “optimal”.
@@ -210,7 +289,7 @@ birthweight_df %>%
 # Question 3
 ##### For this problem, we’ll use the 2017 Central Park weather data that we’ve seen elsewhere. The code chunk below (adapted from the course website) will download these data.
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 weather_df = 
   rnoaa::meteo_pull_monitors(
     c("USW00094728"),
@@ -231,6 +310,15 @@ weather_df =
 
 ##### Use 5000 bootstrap samples and, for each bootstrap sample, produce estimates of these two quantities. Plot the distribution of your estimates, and describe these in words. Using the 5000 bootstrap estimates, identify the 2.5% and 97.5% quantiles to provide a 95% confidence interval for r̂2 and log(β̂0∗β̂1). Note: broom::glance() is helpful for extracting r̂2 from a fitted regression, and broom::tidy() (with some additional wrangling) should help in computing d log(β̂0∗β̂1). 
 
+```{r}
+#fit model from the data set 
+# look at the r square value (broom glance) for one model 
+# broom tidy then get estimated coeff and then rearange for the log thing
+
+# then after doing it once then do it multiple times with the bootstrap 
+
+
+```
 
 
 
