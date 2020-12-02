@@ -292,14 +292,81 @@ weather_df =
 
 ```{r}
 #fit model from the data set 
+
+fit = lm(tmax ~ tmin , data = weather_df)
+fit %>% broom::glance() %>% select(r.squared)
+estimates = fit %>% broom::tidy() %>% select(estimate) 
+estimates %>% 
+  mutate(
+    names = c("beta0", "beta1")
+  ) %>%
+  relocate(names) %>%
+  pivot_wider(
+    names_from = names,
+    values_from = estimate
+  ) %>%
+  mutate(
+    log_thing = log(beta0*beta1)
+  ) 
+
+
 # look at the r square value (broom glance) for one model 
 # broom tidy then get estimated coeff and then rearange for the log thing
 
 # then after doing it once then do it multiple times with the bootstrap 
 
 
+two_quantities = weather_df %>% 
+  modelr::bootstrap(n = 100) %>% 
+  mutate(
+    models = map(strap, ~ lm(tmax ~ tmin ,  data = .x)),
+    rsquare = map(models, broom::glance),  
+    results = map(models, broom::tidy)) %>% 
+  select(rsquare, results) %>% 
+  unnest(results) %>%
+  select(estimate, rsquare) %>%
+  mutate(
+    names = rep(c("beta0", "beta1"), 100) 
+  ) %>% 
+  relocate(names) %>%
+  pivot_wider(
+    names_from = names,
+    values_from = estimate
+  ) %>%
+  mutate(
+    log_thing = log(beta0*beta1)
+  ) %>%
+  unnest(rsquare) %>% 
+  select(r.squared, log_thing) 
+
+two_quantities %>%
+  ggplot(aes(x = log_thing)) + geom_density()
+two_quantities %>%
+  ggplot(aes(x = r.squared)) + geom_density()
+two_quantities %>%
+  summarize(
+    mean_rsquared = mean(r.squared),
+    lower_CI = quantile(r.squared)[2],
+    upper_CI = quantile(r.squared)[4],
+    mean_log_thing = mean(log_thing),
+    lower_CI_log = quantile(log_thing)[2],
+    upper_CI_log = quantile(log_thing)[4],
+  )
 ```
 
+
+```{r}
+nyc_airbnb %>% 
+  filter(boro == "Manhattan") %>% 
+  modelr::bootstrap(n = 1000) %>% 
+  mutate(
+    models = map(strap, ~ lm(price ~ stars + room_type, data = .x)),
+    results = map(models, broom::tidy)) %>% 
+  select(results) %>% 
+  unnest(results) %>% 
+  filter(term == "stars") %>% 
+  ggplot(aes(x = estimate)) + geom_density()
+```
 
 
 
