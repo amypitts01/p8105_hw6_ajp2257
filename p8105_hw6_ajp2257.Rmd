@@ -355,18 +355,7 @@ two_quantities %>%
 ```
 
 
-```{r}
-nyc_airbnb %>% 
-  filter(boro == "Manhattan") %>% 
-  modelr::bootstrap(n = 1000) %>% 
-  mutate(
-    models = map(strap, ~ lm(price ~ stars + room_type, data = .x)),
-    results = map(models, broom::tidy)) %>% 
-  select(results) %>% 
-  unnest(results) %>% 
-  filter(term == "stars") %>% 
-  ggplot(aes(x = estimate)) + geom_density()
-```
+
 
 
 
