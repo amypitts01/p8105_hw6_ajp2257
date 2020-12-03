@@ -291,68 +291,80 @@ weather_df =
 ##### Use 5000 bootstrap samples and, for each bootstrap sample, produce estimates of these two quantities. Plot the distribution of your estimates, and describe these in words. Using the 5000 bootstrap estimates, identify the 2.5% and 97.5% quantiles to provide a 95% confidence interval for r̂2 and log(β̂0∗β̂1). Note: broom::glance() is helpful for extracting r̂2 from a fitted regression, and broom::tidy() (with some additional wrangling) should help in computing d log(β̂0∗β̂1). 
 
 ```{r}
-#fit model from the data set 
-
-fit = lm(tmax ~ tmin , data = weather_df)
-fit %>% broom::glance() %>% select(r.squared)
-estimates = fit %>% broom::tidy() %>% select(estimate) 
-estimates %>% 
-  mutate(
-    names = c("beta0", "beta1")
-  ) %>%
-  relocate(names) %>%
-  pivot_wider(
-    names_from = names,
-    values_from = estimate
-  ) %>%
-  mutate(
-    log_thing = log(beta0*beta1)
-  ) 
-
-
-# look at the r square value (broom glance) for one model 
-# broom tidy then get estimated coeff and then rearange for the log thing
-
-# then after doing it once then do it multiple times with the bootstrap 
-
-
+# getting the two measurements 
 two_quantities = weather_df %>% 
-  modelr::bootstrap(n = 100) %>% 
+  modelr::bootstrap(n = 5000) %>%  # running 5000 bootstop 
   mutate(
-    models = map(strap, ~ lm(tmax ~ tmin ,  data = .x)),
-    rsquare = map(models, broom::glance),  
-    results = map(models, broom::tidy)) %>% 
-  select(rsquare, results) %>% 
-  unnest(results) %>%
+    models = map(strap, ~ lm(tmax ~ tmin ,  data = .x)), # the model with tmax and tmin
+    rsquare = map(models, broom::glance),  # getting r square results from glance 
+    results = map(models, broom::tidy)) %>% # getting estimates from tidy 
+  select(rsquare, results) %>% # select only the rsquare and the results 
+  unnest(results) %>% # now be unnesting the results we are going to get the log estimate. 
   select(estimate, rsquare) %>%
   mutate(
-    names = rep(c("beta0", "beta1"), 100) 
+    names = rep(c("beta0", "beta1"), 5000)  # adding the names of estimates so we can pivot wider 
   ) %>% 
-  relocate(names) %>%
-  pivot_wider(
+  relocate(names) %>% 
+  pivot_wider( # pivoting wider so that the estiamtes are seperated
     names_from = names,
     values_from = estimate
   ) %>%
   mutate(
-    log_thing = log(beta0*beta1)
+    log_estimate = log(beta0*beta1) # this is the log estimates 
   ) %>%
-  unnest(rsquare) %>% 
-  select(r.squared, log_thing) 
+  unnest(rsquare) %>% # unnest the model characteristic 
+  select(r.squared, log_estimate)  # only want the r.square and the log_estimates
 
+```
+
+
+```{r}
+# plotting the log_estimates 
 two_quantities %>%
-  ggplot(aes(x = log_thing)) + geom_density()
+  ggplot(aes(x = log_estimate)) + 
+  geom_density() +
+  labs(
+    title = "Distribution of Log Estimates"
+  )
+
+```
+
+The log(beta0*beta1) has a mean values above 2 but below 2.025. The rest of the values are normally distributed around the mean. The range of the intervals does not seem larger below 2.10 and above 1.85. 
+
+
+
+```{r}
+# plotting the r squared valeus 
 two_quantities %>%
-  ggplot(aes(x = r.squared)) + geom_density()
-two_quantities %>%
+  ggplot(aes(x = r.squared)) + 
+  geom_density() +
+  labs(
+    title = "Distribution of R Squared Values"
+  )
+```
+
+The distribution of r squared values also looks normally distributed with mean between 0.90 and 0.92. The range of values in this distribution also seems contained to about 0.86 to 0.94. 
+
+
+```{r}
+# getting the mean and the CI intervals 
+interval = two_quantities %>%
   summarize(
     mean_rsquared = mean(r.squared),
     lower_CI = quantile(r.squared)[2],
     upper_CI = quantile(r.squared)[4],
-    mean_log_thing = mean(log_thing),
-    lower_CI_log = quantile(log_thing)[2],
-    upper_CI_log = quantile(log_thing)[4],
+    mean_log_estimate = mean(log_estimate),
+    lower_CI_log = quantile(log_estimate)[2],
+    upper_CI_log = quantile(log_estimate)[4],
   )
+
+# printing out the interval 
+interval
 ```
+
+The mean value of the r squared values from the bootstrap is `r interval$mean_rsquared` and has a 95% confidence interval of (`r interval$lower_CI`, `r interval$upper_CI`). The mean value of the log(beta0*beta1) is `r interval$mean_log_estimate` with a 95% confidence interval of (`r interval$lower_CI_log`, `r interval$upper_CI_log`).
+
+
 
 
 
