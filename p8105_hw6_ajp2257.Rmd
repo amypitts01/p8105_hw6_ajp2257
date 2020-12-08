@@ -350,11 +350,11 @@ The distribution of r squared values also looks normally distributed with mean b
 interval = two_quantities %>%
   summarize(
     mean_rsquared = mean(r.squared),
-    lower_CI = quantile(r.squared)[2],
-    upper_CI = quantile(r.squared)[4],
+    lower_CI = quantile(r.squared, 0.025),
+    upper_CI = quantile(r.squared, 0.975),
     mean_log_estimate = mean(log_estimate),
-    lower_CI_log = quantile(log_estimate)[2],
-    upper_CI_log = quantile(log_estimate)[4],
+    lower_CI_log = quantile(log_estimate, 0.025),
+    upper_CI_log = quantile(log_estimate, 0.975),
   )
 
 # printing out the interval 
