@@ -159,7 +159,7 @@ step$anova # display results from the stepwise
 
 
 ```{r}
-# this model is given by the step wise comparision 
+# this model is given by the step wise comparison 
 fit1 = lm(bwt ~ babysex + bhead + blength + delwt + 
                 fincome + gaweeks + mheight + mrace + 
                 parity + ppwt + smoken,
@@ -261,15 +261,14 @@ cv_df %>%
   ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
 
-This violin plot shows that the lowest rmse value come from the fit1 which is the only I create. I choose the predictors based on a stepwise selection so it makes sense that is preforming the best compare to the other two. Comparing fit2 against fit3 we don't see a huge difference so if I had to choose one or the other I would choose the simpler model without all the interaction terms. However, fit1 does have the lowest rmse values and has no over complicating interaction terms therefore I would select this model. 
-
-
+This violin plot shows that the lowest rmse value come from the fit1 which is the model I created. I choose the predictors based on a stepwise selection so it makes sense that is preforming the best compare to the other two. Comparing fit2 against fit3 we don't see a huge difference so if I had to choose one or the other I would choose the simpler model without all the interaction terms. However, fit1 does have the lowest rmse values and has no over complicating interaction terms therefore I would select this model. 
 
 
 # Question 3
 ##### For this problem, we’ll use the 2017 Central Park weather data that we’ve seen elsewhere. The code chunk below (adapted from the course website) will download these data.
 
 ```{r message=FALSE, warning=FALSE}
+# data 
 weather_df = 
   rnoaa::meteo_pull_monitors(
     c("USW00094728"),
